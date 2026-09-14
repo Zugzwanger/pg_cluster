@@ -1,0 +1,81 @@
+---
+# Pre-integration setup: prepare test environment for Docker nodes.
+# Creates files/directories that the Tantor packages create in production
+# but which are absent in the Docker test containers.
+- name: Prepare test environment on cluster nodes
+  hosts: inv_cluster
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Ensure pgbouncer userlist.txt exists
+      ansible.builtin.file:
+        path: /opt/tantor/etc/pgbouncer/userlist.txt
+        state: touch
+        owner: postgres
+        group: postgres
+        mode: "0644"
+
+    - name: Create haproxy-tantor systemd unit (provided by Tantor package in prod)
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/haproxy-tantor.service
+        content: |
+          [Unit]
+          Description=HAProxy Load Balancer (Tantor)
+          After=syslog.target network.target
+          [Service]
+          Type=forking
+          Environment=CONFIG=/opt/tantor/etc/haproxy/haproxy.cfg
+          Environment=PIDFILE=/var/run/haproxy-tantor.pid
+          ExecStartPre=/usr/sbin/haproxy -f $CONFIG -c -q
+          ExecStart=/usr/sbin/haproxy -f $CONFIG -p $PIDFILE
+          ExecReload=/usr/sbin/haproxy -f $CONFIG -c -q
+          ExecStop=/bin/kill -TERM $MAINPID
+          PIDFile=/var/run/haproxy-tantor.pid
+          Restart=on-failure
+          User=root
+          Group=root
+          [Install]
+          WantedBy=multi-user.target
+        mode: "0644"
+      notify: Daemon-reload systemd
+
+    - name: Create keepalived-tantor systemd unit (provided by Tantor package in prod)
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/keepalived-tantor.service
+        content: |
+          [Unit]
+          Description=Keepalive Daemon (Tantor)
+          After=network.target
+          [Service]
+          Type=forking
+          KillMode=process
+          Environment=KEEPALIVED_CONF=/opt/tantor/etc/keepalived/keepalived.conf
+          ExecStart=/usr/sbin/keepalived -f $KEEPALIVED_CONF
+          ExecReload=/bin/kill -HUP $MAINPID
+          ExecStop=/bin/kill -TERM $MAINPID
+          Restart=on-failure
+          [Install]
+          WantedBy=multi-user.target
+        mode: "0644"
+      notify: Daemon-reload systemd
+
+    - name: Ensure haproxy chroot directory exists
+      ansible.builtin.file:
+        path: /opt/tantor/var/lib/haproxy
+        state: directory
+        owner: haproxy
+        group: haproxy
+        mode: "0755"
+
+    - name: Ensure pgbouncer log directory is writable by postgres
+      ansible.builtin.file:
+        path: /opt/tantor/var/log/pgbouncer
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: "0755"
+
+  handlers:
+    - name: Daemon-reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
