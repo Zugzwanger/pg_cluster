@@ -18,7 +18,7 @@ matrix:
     python: "3.11"
     ansible: "9.6.1"
     patroni: "3.3.2"
-    ansible_core: "2.16.7"
+    ansible_core: "2.16.19"
     status: "active"
 
   # --- Python 3.12 with latest Ansible 10 ---
@@ -35,14 +35,19 @@ matrix:
     ansible: "8.7.0"
     patroni: "2.1.6"
     ansible_core: "2.15.11"
-    status: "active"
+    status: "skip"
+    reason: >-
+      ansible-lint==26.1.0 (needed for ansible-core>=2.19 compat, see
+      tests/requirements.txt) requires both ansible-core>=2.16.14 and
+      Python>=3.10; ansible==8.7.0 caps ansible-core at ~=2.15.7 and this
+      entry's controller is Python 3.9, so it fails both independently.
 
   # --- Python 3.10 with Ansible 9 ---
   - name: "py3.10-ansible9-patroni3"
     python: "3.10"
     ansible: "9.6.1"
     patroni: "3.3.2"
-    ansible_core: "2.16.7"
+    ansible_core: "2.16.19"
     status: "active"
 
   # --- Python 3.13 with Ansible 12 ---

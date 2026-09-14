@@ -6,7 +6,7 @@ three-node PostgreSQL cluster in Docker Compose.
 ## Local checks
 
 ```bash
-pip install -r tests/requirements.txt 'ansible==9.6.1' 'ansible-core==2.16.7'
+pip install -r tests/requirements.txt 'ansible==9.6.1' 'ansible-core==2.16.19'
 pip check
 make lint test
 ```
@@ -60,8 +60,15 @@ every PostgreSQL node with bounded retries, and dropped in an `always` block.
 ## Version matrix
 
 `tests/version-matrix.yml` is the single source for local and CI combinations.
-The default Ansible 9.6.1 entry pins core 2.16.7, its minimum compatible release. The original Python 3.8 / Ansible 7 entry is
-explicitly skipped: Ansible 7 and core 2.14 require controller Python 3.9 or newer.
+The default Ansible 9.6.1 entry pins core 2.16.19 — not its lowest compatible release
+(2.16.7), but the lowest patch that satisfies the `ansible-lint==26.1.0` pin in
+`tests/requirements.txt` (see the comment there).
+
+Two entries are explicitly skipped: `py3.8-ansible7-patroni1.6` (Ansible 7 and core 2.14
+require controller Python 3.9+) and `py3.9-ansible8-patroni2` (ansible-core 2.15.11,
+which can't install `tests/requirements.txt` at all — `ansible-lint==26.1.0` needs both
+ansible-core>=2.16.14, above what `ansible==8.7.0` allows, and Python>=3.10, above what
+that entry's controller runs). See each entry's `reason` field in the matrix file.
 
 ```bash
 make test-matrix
