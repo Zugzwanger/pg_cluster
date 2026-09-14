@@ -92,6 +92,35 @@ def make_hostvars(nodes):
     return hostvars
 
 
+try:
+    # ansible-core >=2.19 (data tagging): only strings tagged as trusted are
+    # rendered as Jinja templates -- everything else is silently passed through
+    # unrendered. A plain str read from disk (or from yaml.safe_load, as our
+    # fixtures and group_vars are) is untrusted, so it must be tagged explicitly.
+    # Older ansible-core has no such restriction (and no such helper).
+    from ansible.template import trust_as_template
+except ImportError:
+    def trust_as_template(value):
+        return value
+
+
+def _trust_recursive(value):
+    """Tag every string in a nested structure as trusted for templating.
+
+    Needed for variable VALUES too, not just the top-level template string:
+    group_vars/fixtures routinely define one variable in terms of another
+    (e.g. haproxy_patroni_auth: "{{ patroni_restapi_username }}:...") and
+    ansible-core >=2.19 won't re-template an untrusted variable value either.
+    """
+    if isinstance(value, str):
+        return trust_as_template(value)
+    if isinstance(value, dict):
+        return {k: _trust_recursive(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_trust_recursive(v) for v in value]
+    return value
+
+
 def render_template(template_path, context):
     """Use Ansible's own recursive variable resolution, filters and Jinja header."""
     from ansible.parsing.dataloader import DataLoader
@@ -100,12 +129,21 @@ def render_template(template_path, context):
     variables = dict(context)
     variables.setdefault("playbook_dir", str(REPO_ROOT))
     variables.setdefault("ansible_inventory_sources", [str(REPO_ROOT / "tests/docker/inventory/test_inventory")])
+    variables = _trust_recursive(variables)
     variables["vars"] = dict(variables)
     loader = DataLoader()
     loader.set_basedir(str(template_path.parent))
-    return Templar(loader=loader, variables=variables).template(
-        template_path.read_text(), fail_on_undefined=True, convert_data=False,
-        preserve_trailing_newlines=True,
+    templar = Templar(loader=loader, variables=variables)
+
+    # convert_data is deprecated (removed in ansible-core 2.23): jinja2 native
+    # mode is now unconditional and the flag no longer does anything there.
+    # `evaluate_expression` only exists on the >=2.19 Templar, so use it as the
+    # version probe rather than a hasattr version-parsing dance.
+    kwargs = {} if hasattr(templar, "evaluate_expression") else {"convert_data": False}
+
+    return templar.template(
+        trust_as_template(template_path.read_text()), fail_on_undefined=True,
+        preserve_trailing_newlines=True, **kwargs,
     )
 
 
