@@ -80,8 +80,11 @@ def make_hostvars(nodes):
     hostvars = {}
     for i, node in enumerate(nodes, 1):
         hostvars[node] = {
-            "ansible_default_ipv4": {"address": f"10.20.0.{10+i}", "interface": "eth0"},
-            "ansible_fqdn": node,
+            "ansible_facts": {
+                "default_ipv4": {"address": f"10.20.0.{10+i}", "interface": "eth0"},
+                "fqdn": node,
+                "os_family": "Debian",
+            },
             "ansible_host": f"10.20.0.{10+i}",
             "inventory_hostname": node,
             "unified_hostname": node,
@@ -123,12 +126,14 @@ def test_patroni_yml_template():
     context["hostvars"] = make_hostvars(nodes)
     context["inventory_hostname"] = "pg-node1"
     context["ansible_host"] = "10.20.0.11"
-    context["ansible_default_ipv4"] = {"address": "10.20.0.11", "interface": "eth0"}
-    context["ansible_fqdn"] = "pg-node1"
     context["major_version"] = "16"
     context["edition"] = "be"
     context["postgresql_vendor"] = "tantordb"
-    context["ansible_facts"] = {"os_family": "Debian"}
+    context["ansible_facts"] = {
+        "os_family": "Debian",
+        "default_ipv4": {"address": "10.20.0.11", "interface": "eth0"},
+        "fqdn": "pg-node1",
+    }
 
     try:
         rendered = render_template(tmpl, context)
@@ -193,7 +198,7 @@ def test_etcd_conf_template():
     context["hostvars"] = make_hostvars(nodes)
     context["inventory_hostname"] = "pg-node1"
     context["unified_hostname"] = "pg-node1"
-    context["ansible_default_ipv4"] = {"address": "10.20.0.11", "interface": "eth0"}
+    context["ansible_facts"] = {"default_ipv4": {"address": "10.20.0.11", "interface": "eth0"}}
 
     # etcd-specific computed vars
     context["etcd_listen_public"] = "0.0.0.0"
@@ -284,7 +289,7 @@ def test_keepalived_conf_template():
     context["groups"] = {"all": nodes, "inv_pg": nodes, "inv_keepalived": nodes}
     context["hostvars"] = make_hostvars(nodes)
     context["inventory_hostname"] = "pg-node1"
-    context["ansible_default_ipv4"] = {"address": "10.20.0.11", "interface": "eth0"}
+    context["ansible_facts"] = {"default_ipv4": {"address": "10.20.0.11", "interface": "eth0"}}
 
     try:
         rendered = render_template(tmpl, context)

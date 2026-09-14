@@ -37,7 +37,7 @@ etcd_initial_cluster_token: test-cluster-token-12345
 etcd_init_system: systemd
 etcd_launch: true
 etcd_scheme: "{% if etcd_secure %}https{% else %}http{% endif %}://"
-etcd_cluster: "{% for host in groups[etcd_master_group_name] %}{{ hostvars[host]['unified_hostname'] }}={{ etcd_scheme }}{{ hostvars[host]['ansible_default_ipv4'].address }}:{{ etcd_port_peer }}{% if not loop.last %},{% endif %}{% endfor %}"
+etcd_cluster: "{% for host in groups[etcd_master_group_name] %}{{ hostvars[host]['unified_hostname'] }}={{ etcd_scheme }}{{ hostvars[host]['ansible_facts']['default_ipv4'].address }}:{{ etcd_port_peer }}{% if not loop.last %},{% endif %}{% endfor %}"
 etcd_cluster_data_dir: "{{ etcd_data_dir }}/{{ etcd_cluster_name }}.etcd"
 etcd_cluster_pki_dir: "{{ etcd_data_dir }}/{{ etcd_cluster_name }}.pki"
 etcd_pki_key_file: "{{ inventory_hostname }}{{ etcd_pki_key_suffix }}"
@@ -89,7 +89,7 @@ patroni_restapi_cafile: ""
 patroni_restapi_username: "test_user"
 patroni_restapi_password: "test_pass"
 patroni_etcd3_host: ""
-patroni_etcd3_hosts: "{% for host in groups['inv_etcd'] %}{{ hostvars[host]['ansible_default_ipv4'].address }}:{{ etcd_port_client }}{% if not loop.last %},{% endif %}{% endfor %}"
+patroni_etcd3_hosts: "{% for host in groups['inv_etcd'] %}{{ hostvars[host]['ansible_facts']['default_ipv4'].address }}:{{ etcd_port_client }}{% if not loop.last %},{% endif %}{% endfor %}"
 patroni_etcd3_use_proxies: false
 patroni_etcd3_url: ""
 patroni_etcd3_proxy: ""
@@ -176,7 +176,7 @@ pgbouncer_conf_file: "/opt/tantor/etc/pgbouncer/pgbouncer.ini"
 pgbouncer_pid_file: "/var/run/pgbouncer-tantor/pgbouncer.pid"
 pgbouncer_auth_user: pgbouncer
 pgbouncer_auth_user_passw: pgbouncer819mQ
-pgbouncer_incoming_hosts: "{% for host in groups['inv_cluster'] %}{{ hostvars[host]['ansible_default_ipv4'].address }}{% if not loop.last %},{% endif %}{% endfor %}"
+pgbouncer_incoming_hosts: "{% for host in groups['inv_cluster'] %}{{ hostvars[host]['ansible_facts']['default_ipv4'].address }}{% if not loop.last %},{% endif %}{% endfor %}"
 
 # --- haproxy ---
 haproxy_package_version: ""
@@ -192,9 +192,9 @@ haproxy_stat_password: admin
 keepalived_package_version: ""
 test_subnet_prefix: "{{ lookup('env', 'TEST_SUBNET_PREFIX') | default('10.20.0', true) }}"
 cluster_vip_1: "{{ test_subnet_prefix }}.100"
-vip_interface: "{{ ansible_default_ipv4.interface }}"
+vip_interface: "{{ ansible_facts.default_ipv4.interface }}"
 
-keepalived_vrrp_interface: "{{ ansible_default_ipv4.interface }}"
+keepalived_vrrp_interface: "{{ ansible_facts.default_ipv4.interface }}"
 keepalived_priority_offset: 0
 keepalived_advert_int: 1
 keepalived_auth_pass: "test_vrrp_pass"

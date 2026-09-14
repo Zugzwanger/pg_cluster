@@ -22,7 +22,7 @@
     - name: Check etcd cluster health
       ansible.builtin.command: >
         /opt/tantor/usr/bin/etcdctl
-        --endpoints={% for host in groups['inv_etcd'] %}https://{{ hostvars[host]['ansible_default_ipv4']['address'] }}:{{ etcd_port_client }}{% if not loop.last %},{% endif %}{% endfor %}
+        --endpoints={% for host in groups['inv_etcd'] %}https://{{ hostvars[host]['ansible_facts']['default_ipv4']['address'] }}:{{ etcd_port_client }}{% if not loop.last %},{% endif %}{% endfor %}
         --cacert={{ etcd_pki_ca_cert_dest }}
         --cert={{ etcd_pki_cert_dest }}
         --key={{ etcd_pki_key_dest }}
@@ -39,7 +39,7 @@
     - name: Check etcd cluster health (insecure)
       ansible.builtin.command: >
         /opt/tantor/usr/bin/etcdctl
-        --endpoints={% for host in groups['inv_etcd'] %}http://{{ hostvars[host]['ansible_default_ipv4']['address'] }}:{{ etcd_port_client }}{% if not loop.last %},{% endif %}{% endfor %}
+        --endpoints={% for host in groups['inv_etcd'] %}http://{{ hostvars[host]['ansible_facts']['default_ipv4']['address'] }}:{{ etcd_port_client }}{% if not loop.last %},{% endif %}{% endfor %}
         endpoint health
       environment:
         ETCDCTL_API: "3"
@@ -59,7 +59,7 @@
     # --- Patroni API ---
     - name: Check Patroni API on each node
       ansible.builtin.uri:
-        url: "http://{{ ansible_default_ipv4.address }}:8008/health"
+        url: "http://{{ ansible_facts.default_ipv4.address }}:8008/health"
         method: GET
         return_content: true
         status_code: 200
@@ -140,21 +140,21 @@
     # --- HAProxy routing ---
     - name: Check HAProxy is listening on write port
       ansible.builtin.wait_for:
-        host: "{{ ansible_default_ipv4.address }}"
+        host: "{{ ansible_facts.default_ipv4.address }}"
         port: "{{ haproxy_postgresql_port_rewritten }}"
         timeout: 10
       tags: haproxy
 
     - name: Check HAProxy is listening on read-only port
       ansible.builtin.wait_for:
-        host: "{{ ansible_default_ipv4.address }}"
+        host: "{{ ansible_facts.default_ipv4.address }}"
         port: "{{ haproxy_postgresql_port_readonly }}"
         timeout: 10
       tags: haproxy
 
     - name: Check HAProxy stats endpoint
       ansible.builtin.uri:
-        url: "http://{{ ansible_default_ipv4.address }}:{{ haproxy_stats_port | default(7000) }}/stats"
+        url: "http://{{ ansible_facts.default_ipv4.address }}:{{ haproxy_stats_port | default(7000) }}/stats"
         method: GET
         url_username: "{{ haproxy_stat_user | default('admin') }}"
         url_password: "{{ haproxy_stat_password | default('admin') }}"
@@ -168,13 +168,13 @@
 
     - name: Report HAProxy health
       ansible.builtin.debug:
-        msg: "HAProxy is healthy and listening on {{ ansible_default_ipv4.address }}"
+        msg: "HAProxy is healthy and listening on {{ ansible_facts.default_ipv4.address }}"
       tags: haproxy
 
     # --- PgBouncer connectivity ---
     - name: Check PgBouncer is listening
       ansible.builtin.wait_for:
-        host: "{{ ansible_default_ipv4.address }}"
+        host: "{{ ansible_facts.default_ipv4.address }}"
         port: "{{ pgbouncer_listen_port }}"
         timeout: 10
       tags: pgbouncer
@@ -182,7 +182,7 @@
     - name: Verify SQL routing through HAProxy and PgBouncer on every node
       ansible.builtin.command: >-
         {{ patroni_pg_bin_dir }}/psql -X -A -t -w -v ON_ERROR_STOP=1
-        -h {{ ansible_default_ipv4.address }} -p {{ item.port }}
+        -h {{ ansible_facts.default_ipv4.address }} -p {{ item.port }}
         -U {{ patroni_superuser_username }} -d postgres
         -c "SELECT pg_is_in_recovery();"
       environment:
