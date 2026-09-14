@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+
+# Test artifacts
+.pytest_cache/
+ansible.log
+pki-dir/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+test-artifacts/
