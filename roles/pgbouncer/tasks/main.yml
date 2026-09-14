@@ -78,13 +78,15 @@
     ansible_python_interpreter: "/opt/tantor/usr/bin/python3"
   community.postgresql.postgresql_user:
     login_host: 127.0.0.1
+    login_user: "{{ patroni_superuser_username }}"
+    login_password: "{{ patroni_superuser_password }}"
     db: postgres
     name: "{{ pgbouncer_auth_user }}"
     password: "{{ pgbouncer_auth_user_passw }}"
     encrypted: true
     role_attr_flags: REPLICATION
     state: present
-    port: "5432"
+    port: "{{ patroni_pg_port }}"
   become: true
   become_user: postgres
   when: pgbouncer_psql_node_status.stdout == 'f'

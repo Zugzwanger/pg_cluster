@@ -119,7 +119,7 @@
         src: files/keepalived.conf
         dest: /opt/tantor/etc/keepalived/keepalived.conf
         mode: "0644"
-      notify: "Restart keepalived"
+      notify: "Restart keepalived-tantor service"
 
     - name: Remove keepalived.conf file from localhost
       become: false
@@ -139,4 +139,4 @@
         - { regexp: '^.*interface', line: '   interface {{ vip_interface }}' }
       loop_control:
         label: "{{ item.line }}"
-      notify: "Restart keepalived"
+      notify: "Restart keepalived-tantor service"
