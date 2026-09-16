@@ -5,8 +5,11 @@
 #   - SSH server for ansible connections
 #   - sudo without password for the deploy user
 #   - Python 3 for ansible modules
-#   - All packages the playbooks expect (etcd, haproxy, keepalived, pgbouncer, patroni)
-#   - Tantor compatibility layer (fake *-tantor-all .deb packages + symlinks)
+#   - Real Tantor packages from the public Nexus repository:
+#     etcd-tantor-all, haproxy-tantor-all, keepalived-tantor-all,
+#     pgbouncer-tantor-all, wal-g-tantor-all
+#   - Patroni via pip (patroni-tantor-all is not published in the public Nexus)
+#   - Dummy pg_configurator (pg-configurator-tantor-all is not in the public Nexus)
 
 FROM ubuntu:22.04
 
@@ -25,14 +28,36 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     apt-utils apt-transport-https software-properties-common \
    iproute2 iputils-ping dnsutils \
   telnet wget acl \
-  etcd-server etcd-client \
-   haproxy \
-   keepalived \
-   pgbouncer \
-   kmod \
-   && rm -rf /var/lib/apt/lists/*
+  kmod \
+  && rm -rf /var/lib/apt/lists/*
 
-# Install patroni via pip (not available as apt package on Ubuntu 22.04)
+# ─────────────────────────────────────────────────────────────
+# Tantor Nexus repository (public, no authentication required)
+# ─────────────────────────────────────────────────────────────
+RUN mkdir -p /etc/apt/keyrings \
+    && curl -fsSL https://public.tantorlabs.ru/tantorlabs.ru.asc \
+       -o /etc/apt/keyrings/tantor-nexus.asc \
+    && gpg --dearmor -o /etc/apt/keyrings/tantor-nexus.gpg \
+           /etc/apt/keyrings/tantor-nexus.asc \
+    && echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/tantor-nexus.gpg] https://nexus-public.tantorlabs.ru/repository/ubuntu-22.04 jammy main" \
+       > /etc/apt/sources.list.d/tantorlabs.list \
+    && apt-get update
+
+# Install real Tantor packages from Nexus.
+# These packages ship:
+#   - binaries under /opt/tantor/usr/bin|sbin/
+#   - systemd units: etcd-tantor.service, haproxy-tantor.service,
+#     keepalived-tantor.service, pgbouncer-tantor.service
+#   - users/groups: etcd, haproxy, pgbouncer (created by postinst scripts)
+RUN apt-get install -y --no-install-recommends \
+    etcd-tantor-all \
+    haproxy-tantor-all \
+    keepalived-tantor-all \
+    pgbouncer-tantor-all \
+    wal-g-tantor-all \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install patroni via pip (patroni-tantor-all is not in the public Nexus).
 # Complete the distro Python dependency set before checking pip metadata.
 RUN apt-get update && apt-get install -y --no-install-recommends python3-cairo \
     && rm -rf /var/lib/apt/lists/*
@@ -47,18 +72,14 @@ RUN apt-get update
 RUN locale-gen ru_RU.UTF-8 en_US.UTF-8
 
 # ─────────────────────────────────────────────────────────────
-# Tantor compatibility layer
+# Patroni compatibility layer
 #
-# The production playbooks install *-tantor-all packages and use
-# /opt/tantor/ paths. In Docker we pre-install standard packages
-# and create fake .deb packages so Ansible sees them as installed
-# and skips the installation step. Symlinks under /opt/tantor/
-# map to the real binaries.
+# Patroni is installed via pip because patroni-tantor-all is not
+# available in the public Nexus. The production playbooks expect the
+# binary under /opt/tantor/usr/bin/patroni and check package_facts for
+# patroni-tantor-all, so we provide both: symlinks and a fake .deb
+# marker so the role sees it as installed and skips apt installation.
 # ─────────────────────────────────────────────────────────────
-
-# Create etcd user/group (roles reference etcd_user/etcd_group)
-RUN groupadd --system etcd 2>/dev/null || true \
-    && useradd --system --no-create-home --shell /usr/sbin/nologin --gid etcd etcd 2>/dev/null || true
 
 # Create /opt/tantor directory tree the playbooks write to
 RUN mkdir -p \
@@ -82,19 +103,14 @@ RUN mkdir -p \
     /var/run/pgbouncer-tantor \
     /run/haproxy
 
-# Symlinks: /opt/tantor/usr/bin/<tool> → real binary
-RUN ln -sf /usr/bin/etcd           /opt/tantor/usr/bin/etcd \
-    && ln -sf /usr/bin/etcdctl     /opt/tantor/usr/bin/etcdctl \
-    && ln -sf /usr/local/bin/patroni     /opt/tantor/usr/bin/patroni \
+# Symlinks for patroni (pip-installed, not under /opt/tantor by default)
+RUN ln -sf /usr/local/bin/patroni     /opt/tantor/usr/bin/patroni \
     && ln -sf /usr/local/bin/patronictl  /opt/tantor/usr/bin/patronictl \
-    && ln -sf /usr/sbin/haproxy    /opt/tantor/usr/bin/haproxy \
-    && ln -sf /usr/sbin/keepalived /opt/tantor/usr/bin/keepalived \
-    && ln -sf /usr/sbin/pgbouncer   /opt/tantor/usr/bin/pgbouncer \
-    && ln -sf /usr/bin/python3     /opt/tantor/usr/bin/python3 \
     && ln -sf /usr/local/bin/patroni     /usr/bin/patroni \
     && ln -sf /usr/local/bin/patronictl  /usr/bin/patronictl
 
-# Dummy pg_configurator — produces a JSON config from input parameters
+# Dummy pg_configurator — produces a JSON config from input parameters.
+# pg-configurator-tantor-all is not published in the public Nexus.
 RUN printf '#!/bin/bash\n\
 json="{\\"postgresql\\":{\\"parameters\\":{\\"max_connections\\":200,\\"shared_buffers\\":\\"256MB\\",\\"effective_cache_size\\":\\"768MB\\",\\"maintenance_work_mem\\":\\"64MB\\",\\"checkpoint_completion_target\\":0.9,\\"wal_buffers\\":\\"16MB\\",\\"default_statistics_target\\":100,\\"random_page_cost\\":1.1,\\"effective_io_concurrency\\":200,\\"work_mem\\":\\"4MB\\",\\"min_wal_size\\":\\"80MB\\",\\"max_wal_size\\":\\"1GB\\",\\"max_worker_processes\\":8,\\"max_parallel_workers_per_gather\\":2,\\"max_parallel_workers\\":8,\\"max_replication_slots\\":10,\\"max_wal_senders\\":10,\\"wal_level\\":\\"replica\\",\\"hot_standby\\":\\"on\\",\\"wal_log_hints\\":\\"on\\",\\"unix_socket_directories\\":\\"/var/run/postgresql\\"}}}"\n\
 for arg in "$@"; do\n\
@@ -105,14 +121,13 @@ if [ -n "$outfile" ]; then\n\
   echo "$json" > "$outfile"\nfi\n' > /opt/tantor/usr/bin/pg_configurator \
     && chmod +x /opt/tantor/usr/bin/pg_configurator
 
-# Build and install fake *-tantor-all .deb packages so Ansible's
-# apt/package modules and package_facts see them as installed.
-RUN for pkg in etcd-tantor-all patroni-tantor-all haproxy-tantor-all \
-               keepalived-tantor-all pgbouncer-tantor-all \
-               pg-configurator-tantor-all wal-g-tantor-all; do \
+# Build and install a fake patroni-tantor-all .deb so the patroni role's
+# package_facts check sees it as installed and skips apt installation.
+# (pg-configurator-tantor-all is also faked for the same reason.)
+RUN for pkg in patroni-tantor-all pg-configurator-tantor-all; do \
       dir="/tmp/fake-${pkg}" \
       && mkdir -p "$dir/DEBIAN" \
-      && printf "Package: %s\nVersion: 1.0-docker\nArchitecture: all\nMaintainer: Docker Test <test@docker>\nPriority: optional\nDescription: Fake Tantor package for Docker testing\n" "$pkg" > "$dir/DEBIAN/control" \
+      && printf "Package: %s\nVersion: 1.0-docker\nArchitecture: all\nMaintainer: Docker Test <test@docker>\nPriority: optional\nDescription: Fake Tantor package for Docker testing (pip-installed patroni)\n" "$pkg" > "$dir/DEBIAN/control" \
       && dpkg-deb --build "$dir" "/tmp/${pkg}.deb" \
       && dpkg -i "/tmp/${pkg}.deb" \
       && rm -rf "$dir" "/tmp/${pkg}.deb"; \
@@ -154,13 +169,8 @@ RUN systemctl mask \
    apt-daily-upgrade.service apt-daily-upgrade.timer \
   2>/dev/null || true
 
-# Disable stock services that conflict with Tantor-named units
-RUN systemctl mask \
-    etcd.service \
-    haproxy.service \
-    keepalived.service \
-    pgbouncer.service \
-    2>/dev/null || true
+# The Tantor packages create *-tantor.service units; there are no stock
+# etcd/haproxy/keepalived/pgbouncer services to mask anymore.
 
 EXPOSE 22 2379 2380 5432 6432 8008 7000 15432 15433 16432 16433
 
