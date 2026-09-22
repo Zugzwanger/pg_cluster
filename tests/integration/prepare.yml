@@ -15,7 +15,7 @@
         state: touch
         owner: postgres
         group: postgres
-        mode: "0644"
+        mode: "0600"
 
     - name: Ensure haproxy chroot directory exists
       ansible.builtin.file:

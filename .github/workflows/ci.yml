@@ -84,6 +84,12 @@ jobs:
           docker compose -f tests/docker/docker-compose.yml cp ansible-controller:/tmp/ansible/ansible.log test-artifacts/ansible.log || true
           for node in pg-node1 pg-node2 pg-node3; do
             docker compose -f tests/docker/docker-compose.yml exec -T "$node" journalctl --no-pager > "test-artifacts/$node.log" 2>&1 || true
+            docker compose -f tests/docker/docker-compose.yml exec -T "$node" \
+              sh -c 'systemctl status pgbouncer-tantor --no-pager; ls -la /opt/tantor/etc/pgbouncer /opt/tantor/var/log/pgbouncer /var/run/pgbouncer-tantor' \
+              > "test-artifacts/$node-pgbouncer-status.log" 2>&1 || true
+            docker compose -f tests/docker/docker-compose.yml cp "$node:/opt/tantor/etc/pgbouncer/pgbouncer.ini" "test-artifacts/$node-pgbouncer.ini" || true
+            docker compose -f tests/docker/docker-compose.yml cp "$node:/opt/tantor/etc/pgbouncer/userlist.txt" "test-artifacts/$node-pgbouncer-userlist.txt" || true
+            docker compose -f tests/docker/docker-compose.yml cp "$node:/opt/tantor/var/log/pgbouncer/pgbouncer.log" "test-artifacts/$node-pgbouncer.log" || true
           done
       - uses: actions/upload-artifact@v4
         if: always()

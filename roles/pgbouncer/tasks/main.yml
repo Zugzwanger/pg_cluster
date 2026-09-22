@@ -91,34 +91,24 @@
   become_user: postgres
   when: pgbouncer_psql_node_status.stdout == 'f'
 
-- name: Create userlist for PGbouncer
-  ansible.builtin.file:
-    path: /opt/tantor/etc/pgbouncer/userlist.txt
+# The auth_user password has to be stored in plain text. PgBouncer opens its
+# own backend connection to run auth_query, and a SCRAM secret copied from
+# pg_shadow.passwd cannot be used for that login: a SCRAM secret can only be
+# passed through from an authenticated client, and the internal auth_query
+# connection has no client. With a SCRAM secret there PgBouncer fails with
+# "failed to answer authreq" and every client login dies with
+# "server login has been failing, cached error: failed to answer authreq".
+# Client users are still resolved through auth_query and use SCRAM
+# pass-through, so only the auth_user needs a plain-text entry here.
+- name: Write PgBouncer userlist with the plain-text auth user password
+  ansible.builtin.copy:
+    content: |
+      "{{ pgbouncer_auth_user }}" "{{ pgbouncer_auth_user_passw }}"
+    dest: /opt/tantor/etc/pgbouncer/userlist.txt
     owner: "postgres"
     group: "postgres"
-    mode: "0644"
-
-- name: Check if pgbouncer missing in /opt/tantor/etc/pgbouncer/userlist.txt file
-  ansible.builtin.lineinfile:
-    path: /opt/tantor/etc/pgbouncer/userlist.txt
-    regexp: '\"pgbouncer\"\s\"(?:md5\w+\"|SCRAM-SHA-256.*\")'
-    state: absent
-  check_mode: true
-  register: pgbouncer_userlist
-  changed_when: false
-
-- name: Run query for creation of userlist.txt
-  vars:
-    ansible_python_interpreter: "/opt/tantor/usr/bin/python3"
-  community.postgresql.postgresql_query:
-    login_db: postgres
-    query: |
-      COPY (SELECT usename, passwd FROM pg_shadow WHERE usename='pgbouncer')
-      TO '/opt/tantor/etc/pgbouncer/userlist.txt'
-      WITH (FORMAT CSV, DELIMITER ' ', FORCE_QUOTE *)
-  when: ( groups['inv_cluster'] | length == 1  ) or (not pgbouncer_userlist.found)
-  become: true
-  become_user: postgres
+    mode: "0600"
+  no_log: true
   notify: Restart pgbouncer-tantor
 
 - name: Upload pgbouncer_prepare.sql

@@ -105,14 +105,14 @@
   when: add_balancer is defined and add_balancer|bool
   tags: keepalived_conf, keepalived
   block: # for add_balancer.yml
-    - name: "Fetch keepalived.conf conf file from {{ groups.balancers[0] }}"
+    - name: Fetch keepalived.conf conf file from the first balancer
       run_once: true
       ansible.builtin.fetch:
         src: /opt/tantor/etc/keepalived/keepalived.conf
         dest: files/keepalived.conf
         validate_checksum: true
         flat: true
-      delegate_to: "{{ groups.balancers[0] }}"
+      delegate_to: "{{ groups['balancers'][0] if 'balancers' in groups else inventory_hostname }}"
 
     - name: Copy keepalived.conf conf file to replica
       ansible.builtin.copy:
