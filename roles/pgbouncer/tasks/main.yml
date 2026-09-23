@@ -80,13 +80,13 @@
     login_host: 127.0.0.1
     login_user: "{{ patroni_superuser_username }}"
     login_password: "{{ patroni_superuser_password }}"
-    db: postgres
+    login_db: postgres
     name: "{{ pgbouncer_auth_user }}"
     password: "{{ pgbouncer_auth_user_passw }}"
     encrypted: true
     role_attr_flags: REPLICATION
     state: present
-    port: "{{ patroni_pg_port }}"
+    login_port: "{{ patroni_pg_port }}"
   become: true
   become_user: postgres
   when: pgbouncer_psql_node_status.stdout == 'f'
@@ -129,7 +129,7 @@
   vars:
     ansible_python_interpreter: "/opt/tantor/usr/bin/python3"
   community.postgresql.postgresql_script:
-    db: postgres
+    login_db: postgres
     path: /opt/tantor/etc/pgbouncer/pgbouncer_prepare.sql
   changed_when: false
   when: pgbouncer_psql_node_status.stdout == 'f'

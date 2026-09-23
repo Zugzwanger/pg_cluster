@@ -289,9 +289,9 @@
     - name: Verify expected services are running
       ansible.builtin.assert:
         that:
-          - item in services
-          - services[item]['state'] == 'running'
-        fail_msg: "Service {{ item }} is not running (state: {{ services[item]['state'] | default('not found') }})"
+          - item in ansible_facts.services
+          - ansible_facts.services[item]['state'] == 'running'
+        fail_msg: "Service {{ item }} is not running (state: {{ ansible_facts.services[item]['state'] | default('not found') }})"
         success_msg: "Service {{ item }} is running"
       loop: "{{ expected_services }}"
       tags: services

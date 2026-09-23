@@ -114,16 +114,47 @@
           changed_when: false
           failed_when: postgres_classic_debian_release.rc != 0
 
-        - name: Add repository key (Debian)
-          ansible.builtin.apt_key:
+        - name: Ensure APT keyrings directory exists (Debian)
+          ansible.builtin.file:
+            path: /etc/apt/keyrings
+            state: directory
+            mode: "0755"
+
+        - name: Download PostgreSQL repository key (Debian)
+          ansible.builtin.get_url:
             url: "{{ postgresql_debian_gpg_key }}"
-            state: present
+            dest: /etc/apt/keyrings/postgresql-classic.asc
+            mode: "0644"
+          register: postgres_classic_key_download_debian
+
+        - name: Check binary PostgreSQL repository key (Debian)
+          ansible.builtin.stat:
+            path: /etc/apt/keyrings/postgresql-classic.gpg
+          register: postgres_classic_key_gpg_debian
+
+        - name: Convert PostgreSQL repository key to binary format (Debian)
+          ansible.builtin.command:
+            cmd: gpg --dearmor --yes -o /etc/apt/keyrings/postgresql-classic.gpg /etc/apt/keyrings/postgresql-classic.asc
+          changed_when: true
+          when: postgres_classic_key_download_debian is changed or not postgres_classic_key_gpg_debian.stat.exists
 
         - name: Add PostgreSQL repo (Debian)
-          ansible.builtin.apt_repository:
-            repo: deb https://apt.postgresql.org/pub/repos/apt {{ postgres_classic_debian_release.stdout }}-pgdg main
-            state: present
-            filename: postgresql-classic
+          ansible.builtin.copy:
+            dest: /etc/apt/sources.list.d/postgresql-classic.list
+            content: >
+              deb [signed-by=/etc/apt/keyrings/postgresql-classic.gpg]
+              https://apt.postgresql.org/pub/repos/apt {{ postgres_classic_debian_release.stdout }}-pgdg main
+            mode: "0644"
+          register: postgres_classic_repo_debian
+
+        - name: Update APT cache (Debian)
+          ansible.builtin.apt:
+            update_cache: true
+          register: postgres_classic_apt_update_debian
+          until: postgres_classic_apt_update_debian is succeeded
+          retries: 5
+          delay: 5
+          when: postgres_classic_repo_debian is changed
 
         - name: Install postgresql-server (Debian)
           ansible.builtin.package:
@@ -194,17 +225,48 @@
     - name: Block for Astra Linux (Smolensk and Orel)
       when: (ansible_facts['os_family'] == "Astra Linux") or (ansible_facts['os_family'] == "Astra Linux (Orel)")
       block:
-        - name: Add repository key (Astra)
-          ansible.builtin.apt_key:
+        - name: Ensure APT keyrings directory exists (Astra)
+          ansible.builtin.file:
+            path: /etc/apt/keyrings
+            state: directory
+            mode: "0755"
+
+        - name: Download PostgreSQL repository key (Astra)
+          ansible.builtin.get_url:
             url: "{{ postgresql_debian_gpg_key }}"
-            state: present
+            dest: /etc/apt/keyrings/postgresql-classic.asc
+            mode: "0644"
             validate_certs: false
+          register: postgres_classic_key_download_astra
+
+        - name: Check binary PostgreSQL repository key (Astra)
+          ansible.builtin.stat:
+            path: /etc/apt/keyrings/postgresql-classic.gpg
+          register: postgres_classic_key_gpg_astra
+
+        - name: Convert PostgreSQL repository key to binary format (Astra)
+          ansible.builtin.command:
+            cmd: gpg --dearmor --yes -o /etc/apt/keyrings/postgresql-classic.gpg /etc/apt/keyrings/postgresql-classic.asc
+          changed_when: true
+          when: postgres_classic_key_download_astra is changed or not postgres_classic_key_gpg_astra.stat.exists
 
         - name: Add PostgreSQL repo (Astra)
-          ansible.builtin.apt_repository:
-            repo: deb https://apt.postgresql.org/pub/repos/apt buster-pgdg main
-            state: present
-            filename: postgresql-classic
+          ansible.builtin.copy:
+            dest: /etc/apt/sources.list.d/postgresql-classic.list
+            content: >
+              deb [signed-by=/etc/apt/keyrings/postgresql-classic.gpg]
+              https://apt.postgresql.org/pub/repos/apt buster-pgdg main
+            mode: "0644"
+          register: postgres_classic_repo_astra
+
+        - name: Update APT cache (Astra)
+          ansible.builtin.apt:
+            update_cache: true
+          register: postgres_classic_apt_update_astra
+          until: postgres_classic_apt_update_astra is succeeded
+          retries: 5
+          delay: 5
+          when: postgres_classic_repo_astra is changed
 
         - name: Install postgresql-server (Astra)
           ansible.builtin.package:
@@ -262,8 +324,8 @@
             - "/var/lib/postgresql/"
             - "/etc/postgresql/"
           when:
-            - (services['patroni-tantor.service']['state'] | d()) != 'running'
-            - ('patroni-tantor.service' not in services)
+            - (ansible_facts.services['patroni-tantor.service']['state'] | d()) != 'running'
+            - ('patroni-tantor.service' not in ansible_facts.services)
 
         - name: Create cluster data folders
           ansible.builtin.file:
