@@ -157,11 +157,12 @@
           when: postgres_classic_repo_debian is changed
 
         - name: Install postgresql-server (Debian)
+          # libpq-dev is intentionally not installed here: python3-psycopg2
+          # (installed below) already provides the libpq binding for Ansible.
           ansible.builtin.package:
             name:
               - postgresql-{{ major_version }}
               - postgresql-contrib
-              - libpq-dev
               - python3-psycopg2
             state: present
 
@@ -268,13 +269,43 @@
           delay: 5
           when: postgres_classic_repo_astra is changed
 
+        - name: Check for psycopg2 packages in the OS (Astra)
+          ansible.builtin.command:
+            cmd: "apt-cache show {{ item }}"
+          loop:
+            - python3-psycopg2
+            - python3-module-psycopg2
+            - python-psycopg2
+          register: postgres_classic_psycopg2_apt_check
+          changed_when: false
+          failed_when: false
+
+        - name: Set psycopg2 availability fact (Astra)
+          # A package counts as present only when apt-cache show succeeds AND
+          # prints a record: with empty apt lists apt-cache may return rc=0
+          # while producing no output at all.
+          ansible.builtin.set_fact:
+            postgres_classic_psycopg2_in_os: >-
+              {{ postgres_classic_psycopg2_apt_check.results
+                 | selectattr('rc', 'equalto', 0)
+                 | rejectattr('stdout', 'equalto', '')
+                 | list | length > 0 }}
+
         - name: Install postgresql-server (Astra)
           ansible.builtin.package:
             name:
               - postgresql-{{ major_version }}
               - postgresql-contrib
+            state: present
+
+        # libpq-dev is a build-time dependency and is installed only when
+        # the OS provides no psycopg2 package (python3-psycopg2 or similar).
+        - name: Install libpq-dev when no psycopg2 package in OS (Astra)
+          ansible.builtin.package:
+            name:
               - libpq-dev
             state: present
+          when: not postgres_classic_psycopg2_in_os
 
     - name: Block for AltLinux
       when: (ansible_facts['os_family'] == "Altlinux")

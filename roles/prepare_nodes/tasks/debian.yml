@@ -1,4 +1,30 @@
 ---
+# Names of psycopg2 OS packages (Debian/ALT naming variants).
+# libpq-dev is a build-time dependency and is only needed when the OS
+# provides no psycopg2 package at all; python3-psycopg2 already pulls in
+# the libpq runtime library.
+- name: Check for psycopg2 packages in the OS (apt)
+  ansible.builtin.command:
+    cmd: "apt-cache show {{ item }}"
+  loop:
+    - python3-psycopg2
+    - python3-module-psycopg2
+    - python-psycopg2
+  register: prepare_nodes_psycopg2_apt_check
+  changed_when: false
+  failed_when: false
+
+- name: Set psycopg2 availability fact
+  # A package counts as present only when apt-cache show succeeds AND
+  # prints a record: with empty apt lists apt-cache may return rc=0
+  # while producing no output at all.
+  ansible.builtin.set_fact:
+    prepare_nodes_psycopg2_in_os: >-
+      {{ prepare_nodes_psycopg2_apt_check.results
+         | selectattr('rc', 'equalto', 0)
+         | rejectattr('stdout', 'equalto', '')
+         | list | length > 0 }}
+
 - name: Create folders if not exists
   ansible.builtin.file:
     state: directory
@@ -68,6 +94,16 @@
           - ca-certificates
           - gnupg
           - libpq5
+        state: present
+
+    # Same rule as for apt: libpq5-devel (libpq-dev analogue on ALT)
+    # is only needed when the OS ships no psycopg2 package.
+    - name: Install libpq5-devel when no psycopg2 package in OS
+      when:
+        - ansible_facts.pkg_mgr == 'apt_rpm'
+        - not prepare_nodes_psycopg2_in_os
+      ansible.builtin.package:
+        name:
           - libpq5-devel
         state: present
 
@@ -84,6 +120,17 @@
           - gnupg
           - gpg
           - locales
+        state: present
+        update_cache: true
+
+    # libpq-dev is installed only when the OS has no psycopg2 package
+    # (python3-psycopg2 or similar); otherwise it is unnecessary.
+    - name: Install libpq-dev when no psycopg2 package in OS
+      when:
+        - ansible_facts.pkg_mgr == 'apt'
+        - not prepare_nodes_psycopg2_in_os
+      ansible.builtin.package:
+        name:
           - libpq-dev
         state: present
         update_cache: true
