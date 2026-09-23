@@ -99,3 +99,23 @@ jobs:
       - name: Tear down
         if: always()
         run: make down
+
+  package-policy:
+    name: "Package policy: Astra 1.7 / RedOS 7 / ALT p10"
+    runs-on: ubuntu-22.04
+    # The images live in external registries (astralinux, red-soft,
+    # altlinux); their availability is outside this repository's control,
+    # so a registry outage must not fail the whole CI.
+    continue-on-error: true
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          pip install -r tests/requirements.txt 'ansible-core==2.16.19'
+          ansible-galaxy collection install 'community.docker==3.12.0' 'community.general==8.6.0'
+      - name: Run libpq-dev package-policy checks
+        run: python3 tests/docker/test_package_policy.py

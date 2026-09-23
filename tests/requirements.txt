@@ -16,3 +16,7 @@ yamllint>=1.30
 cryptography>=41.0
 packaging>=24.0
 psycopg2-binary>=2.9
+# Docker SDK for the community.docker connection plugin used by
+# tests/docker/test_package_policy.py (libpq-dev policy checks on real
+# Astra/RedOS/ALT images).
+docker>=6.0

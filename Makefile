@@ -4,6 +4,7 @@
 #   make test           — run static + template tests locally (no Docker)
 #   make test-docker    — run full integration tests in Docker Compose
 #   make test-matrix    — run version matrix tests (multiple Python/Ansible/Patroni)
+#   make test-policy    — run libpq-dev package-policy checks on Astra/RedOS/ALT images
 #   make up             — start the Docker test cluster
 #   make down           — stop and remove the Docker test cluster
 #   make lint           — run yamllint + ansible-lint
@@ -20,7 +21,7 @@ PLAYBOOK     := pg-cluster.yaml
 EXTRA_VARS   := tests/docker/group_vars/all.yml
 
 # Default: run local static + template tests only
-.PHONY: test test-docker test-matrix test-matrix-static up down lint syntax templates static clean help
+.PHONY: test test-docker test-matrix test-matrix-static test-policy up down lint syntax templates static clean help
 
 ## help: Show available targets
 help:
@@ -80,6 +81,10 @@ test-docker: up
 ## test-matrix: Run version matrix tests
 test-matrix:
 	$(PYTHON) tests/run_version_matrix.py
+
+## test-policy: Run libpq-dev policy checks on real OS images (Docker, needs registry access)
+test-policy:
+	$(PYTHON) tests/docker/test_package_policy.py
 
 ## test-matrix-static: Run only static tests for all matrix entries
 test-matrix-static:
