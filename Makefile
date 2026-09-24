@@ -26,7 +26,7 @@ COMPOSE_ASTRA      := docker compose -f tests/docker/docker-compose.astra.yml
 ANSIBLE_ASTRA_VARS := -i $(INVENTORY) -e @$(EXTRA_VARS) -e @tests/docker/astra-extra-vars.yml
 
 # Default: run local static + template tests only
-.PHONY: test test-docker test-matrix test-matrix-static test-policy test-astra astra-down up down lint syntax templates static clean help
+.PHONY: test test-docker test-matrix test-matrix-static test-policy test-astra astra-up test-astra-deploy astra-down up down lint syntax templates static clean help
 
 ## help: Show available targets
 help:
@@ -34,6 +34,8 @@ help:
 	@echo "  make test         — Run static + template tests locally (no Docker needed)"
 	@echo "  make test-docker  — Run full integration tests in Docker Compose"
 	@echo "  make test-matrix  — Run version matrix tests (Python/Ansible/Patroni combinations)"
+	@echo "  make test-policy  — Run libpq-dev package-policy checks (Astra/RedOS/ALT images)"
+	@echo "  make test-astra   — Full integration run on Astra Linux 1.7 nodes (Docker)"
 	@echo "  make up           — Start the Docker test cluster"
 	@echo "  make down         — Stop and remove the Docker test cluster"
 	@echo "  make lint         — Run yamllint + ansible-lint"
@@ -91,12 +93,21 @@ test-matrix:
 test-policy:
 	$(PYTHON) tests/docker/test_package_policy.py
 
-## test-astra: Full integration run on Astra Linux SE 1.7 nodes (Docker, needs registry+nexus access)
-test-astra:
+## astra-up: Build and start the Astra test cluster
+astra-up:
 	$(COMPOSE_ASTRA) up -d --build --wait --wait-timeout 900
+
+## test-astra-deploy: Deploy and verify on a running Astra test cluster
+test-astra-deploy:
 	$(COMPOSE_ASTRA) exec -T ansible-controller bash -lc "cd /opt/pg_cluster && ansible-playbook $(ANSIBLE_ASTRA_VARS) tests/integration/prepare.yml"
 	$(COMPOSE_ASTRA) exec -T ansible-controller bash -lc "cd /opt/pg_cluster && ansible-playbook $(ANSIBLE_ASTRA_VARS) $(PLAYBOOK)"
 	$(COMPOSE_ASTRA) exec -T ansible-controller bash -lc "cd /opt/pg_cluster && ansible-playbook $(ANSIBLE_ASTRA_VARS) tests/integration/check_cluster.yml"
+
+## test-astra: Full integration run on Astra Linux SE 1.7 nodes (Docker, needs registry+nexus access)
+test-astra: astra-up test-astra-deploy
+	@echo "============================================"
+	@echo "ASTRA INTEGRATION RUN PASSED"
+	@echo "============================================"
 
 ## astra-down: Stop and remove the Astra test cluster
 astra-down:
