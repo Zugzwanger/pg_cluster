@@ -20,8 +20,13 @@ INVENTORY    := tests/docker/inventory/test_inventory
 PLAYBOOK     := pg-cluster.yaml
 EXTRA_VARS   := tests/docker/group_vars/all.yml
 
+# Astra Linux 1.7 integration run (ALSE 1.7.3 nodes, target Python 3.7,
+# controller ansible 10 / ansible-core 2.17, production tantordb path).
+COMPOSE_ASTRA      := docker compose -f tests/docker/docker-compose.astra.yml
+ANSIBLE_ASTRA_VARS := -i $(INVENTORY) -e @$(EXTRA_VARS) -e @tests/docker/astra-extra-vars.yml
+
 # Default: run local static + template tests only
-.PHONY: test test-docker test-matrix test-matrix-static test-policy up down lint syntax templates static clean help
+.PHONY: test test-docker test-matrix test-matrix-static test-policy test-astra astra-down up down lint syntax templates static clean help
 
 ## help: Show available targets
 help:
@@ -85,6 +90,17 @@ test-matrix:
 ## test-policy: Run libpq-dev policy checks on real OS images (Docker, needs registry access)
 test-policy:
 	$(PYTHON) tests/docker/test_package_policy.py
+
+## test-astra: Full integration run on Astra Linux SE 1.7 nodes (Docker, needs registry+nexus access)
+test-astra:
+	$(COMPOSE_ASTRA) up -d --build --wait --wait-timeout 900
+	$(COMPOSE_ASTRA) exec -T ansible-controller bash -lc "cd /opt/pg_cluster && ansible-playbook $(ANSIBLE_ASTRA_VARS) tests/integration/prepare.yml"
+	$(COMPOSE_ASTRA) exec -T ansible-controller bash -lc "cd /opt/pg_cluster && ansible-playbook $(ANSIBLE_ASTRA_VARS) $(PLAYBOOK)"
+	$(COMPOSE_ASTRA) exec -T ansible-controller bash -lc "cd /opt/pg_cluster && ansible-playbook $(ANSIBLE_ASTRA_VARS) tests/integration/check_cluster.yml"
+
+## astra-down: Stop and remove the Astra test cluster
+astra-down:
+	$(COMPOSE_ASTRA) down -v
 
 ## test-matrix-static: Run only static tests for all matrix entries
 test-matrix-static:

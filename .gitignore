@@ -19,3 +19,7 @@ pki-dir/
 *~
 
 test-artifacts/
+
+# Local session artifacts (venvs, probe files, run logs)
+.ansible/
+.ci_logs/
